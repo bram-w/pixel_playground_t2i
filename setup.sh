@@ -20,6 +20,8 @@ pip install scikit-image
 
 pip install xformers
 pip install streamlit
+pip install flask
+pip install -U flask-cors
 
 if test -f "/root/.bashrc"; then
   echo """PATH="/export/home/google-cloud-sdk/bin:\$PATH"""" >> /root/.bashrc
