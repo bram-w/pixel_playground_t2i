@@ -198,7 +198,10 @@ def generate_and_reject(
         correct_face=False, # currently the pipeline detects "face" generically including animal faces so have this as toggle
         display_all=False,
         h=512, w=512,
+        n_return_im=1
     ):
+    if n_return_im > 1:
+        assert not correct_face
 
     start_time = time.time()
     images = []
@@ -222,7 +225,7 @@ def generate_and_reject(
     if display_all:
         display(image_grid(images, n_batch, bs))
 
-    gen_img = images[idx_rank[0]]
+    gen_img = images[idx_rank[0]] if (n_return_im==1) else [images[idx_rank[i]] for i in range(n_return_im)]
     if correct_face:
         try:
             gen_img = correct_faces_func(gen_img, face_seed=seed_bump)
@@ -382,14 +385,17 @@ def correct_faces_func(image,
     return image_to_paste
 
 
-def gen(prompt, resample, upsample, seed, dim):
+def gen(prompt, resample, upsample, seed, dim, n_return_im=1):
     print(prompt, resample, upsample, seed, dim)
+    if n_return_im > 1:
+        assert not (resample or upsample)
     im = generate_and_reject(prompt=prompt,
                                seed_bump=seed,
                                correct_face=False,
                                n_batch=4, bs=8,
                                w=dim, h=dim,
-                               display_all=False)
+                               display_all=False,
+                               n_return_im=n_return_im)
     # Adding face upsampling in is TODO
     if resample:
         print("Resample")
