@@ -63,12 +63,14 @@ def gen():
     dim = int(request_dict.get("dim"))
     resample = request_dict["resample"]
     upsample = request_dict["upsample"]
+    sdxl = request_dict.get('sdxl')
 
     output = gen_functions.gen(
                             text,
                             resample, upsample,
                             seed=seed,
-                            dim=dim
+                            dim=dim,
+                            sdxl=sdxl
                             )
 
     # return (encode_image(output),)
