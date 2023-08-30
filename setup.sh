@@ -23,6 +23,7 @@ pip install streamlit
 pip install flask
 pip install -U flask-cors
 pip install invisible-watermark>=0.2.0 # for sdxl
+pip install safetensors
 
 
 if test -f "/root/.bashrc"; then
