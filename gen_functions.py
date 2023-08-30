@@ -55,6 +55,8 @@ from scipy.signal import convolve2d
 from diffusers import IFPipeline, IFSuperResolutionPipeline, DiffusionPipeline
 from diffusers.utils import pt_to_pil
 
+from diffusers import StableDiffusionXLPipeline
+
 
 from huggingface_hub import login
 with open('hf_auth', 'r') as f:
@@ -122,7 +124,9 @@ super_res_pipe.enable_attention_slicing()
 super_res_pipe.set_use_memory_efficient_attention_xformers(True)
 # """
 
-
+sdxl_pipe = StableDiffusionXLPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, variant="fp16"
+sdxl_pipe.to("cuda:1")
 
 # Pickscore func
 def calc_probs(prompt, images):
@@ -385,8 +389,12 @@ def correct_faces_func(image,
     return image_to_paste
 
 
-def gen(prompt, resample, upsample, seed, dim, n_return_im=1):
+def gen(prompt, resample, upsample, seed, dim, n_return_im=1,
+       sdxl=False):
     print(prompt, resample, upsample, seed, dim)
+    if sdxl:
+        assert n_return_im==1
+        return sdxl_pipe(prompt=prompt).images[0]
     if n_return_im > 1:
         assert not (resample or upsample)
     im = generate_and_reject(prompt=prompt,
