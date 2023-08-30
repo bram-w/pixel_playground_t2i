@@ -6,7 +6,7 @@ pip install ftfy
 pip install regex
 pip install setuptools==59.5.0
 pip install transformers==4.27.2
-pip install diffusers==0.18.0
+pip install diffusers==0.20.0
 pip install git+https://github.com/openai/CLIP.git
 pip install torchmetrics
 pip install open_clip_torch
