@@ -418,5 +418,6 @@ def gen(prompt, resample, upsample, seed, dim, n_return_im=1,
         im = super_res_pipe(
             prompt=prompt,
             image=im,
+            num_inference_steps=30
         ).images[0]
     return im
