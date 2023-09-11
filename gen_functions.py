@@ -125,7 +125,7 @@ super_res_pipe.set_use_memory_efficient_attention_xformers(True)
 # """
 
 sdxl_pipe = StableDiffusionXLPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, variant="fp16"
+    "stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, variant="fp16")
 sdxl_pipe.to("cuda:1")
 
 # Pickscore func
