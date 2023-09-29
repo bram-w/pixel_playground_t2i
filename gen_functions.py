@@ -1,4 +1,5 @@
-from diffusers import DiffusionPipeline
+from diffusers import StableDiffusionPipeline, UNet2DConditionModel
+
 import torch
 from diffusers import DPMSolverMultistepScheduler
 from PIL import Image
@@ -63,66 +64,77 @@ with open('hf_auth', 'r') as f:
     auth_token = f.readlines()[0].strip()
 login(auth_token)
 
-# sd 2.1 vs sd 1.5
-model_id = "runwayml/stable-diffusion-v1-5"
 
-unet_path = '/export/share/bwallace/gradio_files/ttmpytmpytmpymptmptmpt_epoch_85.ckpt'
-# model_id = "stabilityai/stable-diffusion-2-1-base"
+xgen_sdxl = True
 
-base_pipeline = DiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to('cuda')
-base_pipeline.scheduler = DPMSolverMultistepScheduler.from_config(base_pipeline.scheduler.config)
+if xgen_sdxl:
+    model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+    unet_path = '/export/share/bwallace/gradio_files/dpo_unet/'
+    base_pipeline = StableDiffusionXLPipeline.from_pretrained(
+                            model_id, torch_dtype=torch.float16,
+                            variant="fp16" # , use_safetensors=True
+                        ).to("cuda")
+else:
+    model_id = "runwayml/stable-diffusion-v1-5"
+    unet_path = '/export/share/bwallace/gradio_files/ttmpytmpytmpymptmptmpt_epoch_85.ckpt'
+    base_pipeline = DiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to('cuda')
+    base_pipeline.scheduler = DPMSolverMultistepScheduler.from_config(base_pipeline.scheduler.config)
 device = "cuda"
-# load model
-processor_name_or_path = "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
-model_pretrained_name_or_path = "yuvalkirstain/PickScore_v1"
 
-pickscore_processor = AutoProcessor.from_pretrained(processor_name_or_path)
-pickscore_model = AutoModel.from_pretrained(model_pretrained_name_or_path).eval().to(device)
-
-
-img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to(
-    device
-)
-# Need to disable b/c of all the face skin
-img2img_pipe.old_safety_checker  = img2img_pipe.safety_checker
-img2img_pipe.safety_checker = None
-
-seg_processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
-seg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
-
-face_pixel_thresh = 150
 
 
 print("Loading from", unet_path)
-ckpt = torch.load(unet_path)
-base_pipeline.unet.load_state_dict({k.replace('unet.',''):v for k,v in ckpt['model'].items() if 'unet' in k})
-img2img_pipe.unet.load_state_dict({k.replace('unet.',''):v for k,v in ckpt['model'].items() if 'unet' in k})
+if xgen_sdxl:
+    unet = UNet2DConditionModel.from_pretrained(unet_path,
+                                                      torch_dtype=torch.float16).to('cuda')
+    base_pipeline.unet = unet
+else:
+    # load model
+    processor_name_or_path = "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
+    model_pretrained_name_or_path = "yuvalkirstain/PickScore_v1"
+
+    pickscore_processor = AutoProcessor.from_pretrained(processor_name_or_path)
+    pickscore_model = AutoModel.from_pretrained(model_pretrained_name_or_path).eval().to(device)
 
 
-res_64_to_256 = IFSuperResolutionPipeline.from_pretrained(
-    "DeepFloyd/IF-II-L-v1.0", text_encoder=None, variant="fp16", torch_dtype=torch.float16
-)
-res_64_to_256.enable_model_cpu_offload()
+    img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to(
+        device
+    )
+    # Need to disable b/c of all the face skin
+    img2img_pipe.old_safety_checker  = img2img_pipe.safety_checker
+    img2img_pipe.safety_checker = None
+
+    seg_processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
+    seg_model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
+
+    face_pixel_thresh = 150
 
 
-base_df_pipe = IFPipeline.from_pretrained("DeepFloyd/IF-I-M-v1.0", variant="fp16", torch_dtype=torch.float16)
-base_df_pipe.enable_model_cpu_offload()
+    ckpt = torch.load(unet_path)
+    base_pipeline.unet.load_state_dict({k.replace('unet.',''):v for k,v in ckpt['model'].items() if 'unet' in k})
+    img2img_pipe.unet.load_state_dict({k.replace('unet.',''):v for k,v in ckpt['model'].items() if 'unet' in k})
+    res_64_to_256 = IFSuperResolutionPipeline.from_pretrained(
+        "DeepFloyd/IF-II-L-v1.0", text_encoder=None, variant="fp16", torch_dtype=torch.float16
+    )
+    res_64_to_256.enable_model_cpu_offload()
+    base_df_pipe = IFPipeline.from_pretrained("DeepFloyd/IF-I-M-v1.0", variant="fp16", torch_dtype=torch.float16)
+    base_df_pipe.enable_model_cpu_offload()
+    # """
+    # Below might not even be needed
+    safety_modules = {
+            "feature_extractor": base_df_pipe.feature_extractor,
+            "safety_checker": None, # pipe.safety_checker,
+            "watermarker": None, # pipe.watermarker,
+    }
+    super_res_pipe = DiffusionPipeline.from_pretrained(
+        "stabilityai/stable-diffusion-x4-upscaler", **safety_modules, torch_dtype=torch.float16
+    )
+    super_res_pipe.enable_model_cpu_offload()
+    super_res_pipe.enable_attention_slicing()
+    # super_res_pipe.enable_sequential_cpu_offload()
+    super_res_pipe.set_use_memory_efficient_attention_xformers(True)
+    # """
 
-# """
-# Below might not even be needed
-safety_modules = {
-        "feature_extractor": base_df_pipe.feature_extractor,
-        "safety_checker": None, # pipe.safety_checker,
-        "watermarker": None, # pipe.watermarker,
-}
-super_res_pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-x4-upscaler", **safety_modules, torch_dtype=torch.float16
-)
-super_res_pipe.enable_model_cpu_offload()
-super_res_pipe.enable_attention_slicing()
-# super_res_pipe.enable_sequential_cpu_offload()
-super_res_pipe.set_use_memory_efficient_attention_xformers(True)
-# """
 
 sdxl_pipe = StableDiffusionXLPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, variant="fp16")
@@ -395,6 +407,8 @@ def gen(prompt, resample, upsample, seed, dim, n_return_im=1,
     if sdxl:
         assert n_return_im==1
         return sdxl_pipe(prompt=prompt).images[0]
+    elif xgen_sdxl:
+        return base_pipeline(prompt=prompt).images[0]
     if n_return_im > 1:
         assert not (resample or upsample)
     im = generate_and_reject(prompt=prompt,
