@@ -404,11 +404,11 @@ def correct_faces_func(image,
 def gen(prompt, resample, upsample, seed, dim, n_return_im=1,
        sdxl=False):
     print(prompt, resample, upsample, seed, dim)
-    if sdxl:
+    if xgen_sdxl:
+        return base_pipeline(prompt=prompt).images[0]
+    elif sdxl:
         assert n_return_im==1
         return sdxl_pipe(prompt=prompt).images[0]
-    elif xgen_sdxl:
-        return base_pipeline(prompt=prompt).images[0]
     if n_return_im > 1:
         assert not (resample or upsample)
     im = generate_and_reject(prompt=prompt,
